@@ -4,82 +4,94 @@ import string
 from typing import Dict, Any
 
 
-def generate_random_key(length: int) -> str:
-    """Generate a random key of given length (uppercase A-Z)."""
+def _generate_random_key(length: int) -> str:
+    """Internal function to generate a random key of a given length."""
+    if length <= 0:
+        return ""
     return ''.join(random.choice(string.ascii_uppercase) for _ in range(length))
 
 
-def string_encryption(plaintext: str, key: str) -> Dict[str, Any]:
-    """Encrypt plaintext using One-Time Pad (Vernam Cipher)."""
-    plaintext = plaintext.upper().replace(" ", "")
-    key = key.upper()
-
-    if len(key) < len(plaintext):
-        raise ValueError(
-            "Key must be at least as long as plaintext for One-Time Pad.")
-
-    cipher_text = ""
+def encrypt(plaintext: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Encrypts plaintext using One-Time Pad, supporting custom or generated keys.
+    """
+    plaintext_processed = "".join(filter(str.isalpha, plaintext.upper()))
+    key = ""
     steps = []
 
-    for p, k in zip(plaintext, key):
-        if p.isalpha():
-            c_val = (ord(p) - 65 + ord(k) - 65) % 26
-            c = chr(c_val + 65)
-            cipher_text += c
-            steps.append(
-                f"{p}({ord(p)-65}) + {k}({ord(k)-65}) = {c_val} → {c}")
-        else:
-            cipher_text += p
+    # Option 1: Generate a random key if requested by the UI
+    if parameters.get("generate_key"):
+        key = _generate_random_key(len(plaintext_processed))
+        steps.append(
+            f"Generated a random key of length {len(plaintext_processed)}.")
+    # Option 2: Use a custom key provided by the user
+    else:
+        key = parameters.get("key", "").upper()
+        if len(key) < len(plaintext_processed):
+            raise ValueError(
+                f"Custom key length ({len(key)}) must be at least as long as the plaintext length ({len(plaintext_processed)})."
+            )
+
+    cipher_text = ""
+    for p, k in zip(plaintext_processed, key):
+        c_val = (ord(p) - 65 + ord(k) - 65) % 26
+        c = chr(c_val + 65)
+        cipher_text += c
+        steps.append(f"{p}({ord(p)-65}) + {k}({ord(k)-65}) = {c_val} → {c}")
 
     return {"ciphertext": cipher_text, "key": key, "steps": steps}
 
 
-def string_decryption(ciphertext: str, key: str) -> Dict[str, Any]:
-    """Decrypt ciphertext using One-Time Pad (Vernam Cipher)."""
-    ciphertext = ciphertext.upper().replace(" ", "")
-    key = key.upper()
-
-    if len(key) < len(ciphertext):
-        raise ValueError(
-            "Key must be at least as long as ciphertext for One-Time Pad.")
-
-    plain_text = ""
+def decrypt(ciphertext: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Decrypts ciphertext using One-Time Pad. A key is always required for decryption.
+    """
+    ciphertext_processed = "".join(filter(str.isalpha, ciphertext.upper()))
+    key = parameters.get("key", "").upper()
     steps = []
 
-    for c, k in zip(ciphertext, key):
-        if c.isalpha():
-            p_val = (ord(c) - 65 - (ord(k) - 65)) % 26
-            p = chr(p_val + 65)
-            plain_text += p
-            steps.append(
-                f"{c}({ord(c)-65}) - {k}({ord(k)-65}) = {p_val} → {p}")
-        else:
-            plain_text += c
+    if not key:
+        raise ValueError("A key is required for One-Time Pad decryption.")
+    if len(key) < len(ciphertext_processed):
+        raise ValueError(
+            f"Key length ({len(key)}) must be at least as long as the ciphertext length ({len(ciphertext_processed)})."
+        )
+
+    plain_text = ""
+    for c, k in zip(ciphertext_processed, key):
+        p_val = (ord(c) - 65 - (ord(k) - 65)) % 26
+        p = chr(p_val + 65)
+        plain_text += p
+        steps.append(f"{c}({ord(c)-65}) - {k}({ord(k)-65}) = {p_val} → {p}")
 
     return {"plaintext": plain_text, "key": key, "steps": steps}
 
 
-# ----------------------------
-# Standalone Test (optional)
-# ----------------------------
+# --- Standalone Test ---
 if __name__ == "__main__":
-    message = input("Enter plaintext: ").strip().upper()
-    choice = input("Do you want to generate a random key? (y/n): ").lower()
+    message = "THISISATEST"
 
-    if choice == "y":
-        key = generate_random_key(len(message))
-        print(f"Generated Key: {key}")
-    else:
-        key = input("Enter key (same length as message): ").strip().upper()
+    print("--- Test 1: Random Key Generation ---")
+    enc_rand = encrypt(message, {"generate_key": True})
+    print(f"Plaintext: {message}")
+    print(f"Generated Key: {enc_rand['key']}")
+    print(f"Ciphertext: {enc_rand['ciphertext']}")
 
-    enc = string_encryption(message, key)
-    print("\nCiphertext:", enc["ciphertext"])
-    print("Steps:")
-    for step in enc["steps"]:
-        print(" ", step)
+    dec_rand = decrypt(enc_rand['ciphertext'], {"key": enc_rand['key']})
+    print(f"Decrypted: {dec_rand['plaintext']}")
+    assert dec_rand['plaintext'] == message
+    print("Random Key Test Successful!")
 
-    dec = string_decryption(enc["ciphertext"], key)
-    print("\nDecrypted Text:", dec["plaintext"])
-    print("Decryption Steps:")
-    for step in dec["steps"]:
-        print(" ", step)
+    print("\n" + "="*30 + "\n")
+
+    print("--- Test 2: Custom Key ---")
+    custom_key = "XMCKL" * 3  # Make a long enough key
+    enc_custom = encrypt(message, {"key": custom_key})
+    print(f"Plaintext: {message}")
+    print(f"Custom Key: {custom_key}")
+    print(f"Ciphertext: {enc_custom['ciphertext']}")
+
+    dec_custom = decrypt(enc_custom['ciphertext'], {"key": custom_key})
+    print(f"Decrypted: {dec_custom['plaintext']}")
+    assert dec_custom['plaintext'] == message
+    print("Custom Key Test Successful!")

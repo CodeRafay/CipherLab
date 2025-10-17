@@ -38,7 +38,6 @@ def modinv_int(a: int, m: int) -> int:
 def matrix_minor(mat: np.ndarray, i: int, j: int) -> int:
     """Return determinant of minor matrix (int)."""
     sub = np.delete(np.delete(mat, i, axis=0), j, axis=1)
-    # determinant may be float due to numpy; round to nearest int
     det = int(round(np.linalg.det(sub)))
     return det
 
@@ -52,7 +51,6 @@ def matrix_adjugate(mat: np.ndarray) -> np.ndarray:
             minor_det = matrix_minor(mat, i, j)
             sign = (-1) ** (i + j)
             cofactors[i, j] = sign * minor_det
-    # adjugate is transpose of cofactor matrix
     adj = cofactors.T
     return adj
 
@@ -60,14 +58,11 @@ def matrix_adjugate(mat: np.ndarray) -> np.ndarray:
 def matrix_mod_inv(mat: np.ndarray, mod: int = MOD) -> np.ndarray:
     """
     Compute modular inverse of integer matrix `mat` modulo `mod`.
-    Uses det, adjugate method:
-        inv_mod = det_inv * adj(mat)  (mod m)
-    Raises ValueError if inverse doesn't exist.
     """
     if mat.shape[0] != mat.shape[1]:
         raise ValueError("Key matrix must be square.")
     n = mat.shape[0]
-    det = int(round(np.linalg.det(mat)))  # integer determinant
+    det = int(round(np.linalg.det(mat)))
     det_mod = det % mod
 
     try:
@@ -87,19 +82,32 @@ def matrix_mod_inv(mat: np.ndarray, mod: int = MOD) -> np.ndarray:
 
 def parse_key_matrix_from_params(parameters: Dict[str, Any]) -> np.ndarray:
     """
-    Accepts either:
-    - parameters['key_matrix']: a list-of-lists (ints) representing the key matrix, OR
-    - parameters['key']: a string whose length is a perfect square (e.g., 4,9,16) and will be converted to numbers
-    Returns numpy.ndarray (dtype=int)
+    Parses the key from parameters, accepting either a text key or a pre-formatted matrix.
     """
+    # This branch handles numeric matrix input from the UI
     if "key_matrix" in parameters and parameters["key_matrix"] is not None:
-        mat = np.array(parameters["key_matrix"], dtype=int)
-        if mat.shape[0] != mat.shape[1]:
-            raise ValueError("Provided key_matrix must be square.")
-        return mat
+        try:
+            mat = np.array(parameters["key_matrix"], dtype=int)
+            if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:
+                raise ValueError(
+                    "Provided key_matrix must be a square 2D array.")
+            return mat
+        except (ValueError, TypeError):
+            raise ValueError(
+                "Invalid format for key_matrix. It must be a list of lists of integers.")
+
+    # This branch handles the text key input
     elif "key" in parameters and parameters["key"]:
         key = str(parameters["key"]).upper().replace(" ", "")
+
+        if not key:
+            raise ValueError("Hill cipher key string cannot be empty.")
+
         nums = text_to_numbers(key)
+        if not nums:
+            raise ValueError(
+                "Hill cipher key must contain alphabetic characters.")
+
         size = int(len(nums) ** 0.5)
         if size * size != len(nums):
             raise ValueError(
@@ -108,7 +116,7 @@ def parse_key_matrix_from_params(parameters: Dict[str, Any]) -> np.ndarray:
         return mat
     else:
         raise ValueError(
-            "No key provided. Provide 'key_matrix' or 'key' in parameters.")
+            "No key provided. Provide 'key' (string) or 'key_matrix' (list of lists) in parameters.")
 
 # -------------------------
 # Encryption / Decryption
@@ -118,27 +126,27 @@ def parse_key_matrix_from_params(parameters: Dict[str, Any]) -> np.ndarray:
 def encrypt(plaintext: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
     """
     Hill cipher encryption.
-    parameters: expects 'key_matrix' (list of lists) OR 'key' (string of length n*n)
-    Returns dict with:
-        ciphertext (str),
-        key_matrix (list of lists),
-        steps (list of step strings)
     """
     key_mat = parse_key_matrix_from_params(parameters)
     key_mat = key_mat % MOD
     n = key_mat.shape[0]
 
-    # Prepare plaintext: uppercase, remove non-alpha, pad with 'X' if necessary
+    # --- ADDED: Format the key matrix for display in the steps ---
+    matrix_str_repr = "\n".join(["  ".join(map(str, row)) for row in key_mat])
+    steps = [f"Using Key Matrix:\n{matrix_str_repr}\n" + "-"*15]
+
+    if n == 0:
+        return {"ciphertext": plaintext, "key_matrix": [], "steps": ["Error: Key matrix is empty. No encryption performed."]}
+
     filtered = "".join([c for c in plaintext if c.isalpha()]).upper()
     if len(filtered) == 0:
-        return {"ciphertext": "", "key_matrix": key_mat.tolist(), "steps": []}
+        return {"ciphertext": "", "key_matrix": key_mat.tolist(), "steps": steps}
+
     if len(filtered) % n != 0:
         pad_len = n - (len(filtered) % n)
         filtered += "X" * pad_len
 
-    steps = []
     ciphertext = ""
-
     for i in range(0, len(filtered), n):
         block = filtered[i:i+n]
         vec = np.array(text_to_numbers(block), dtype=int).reshape(n, 1)
@@ -154,30 +162,28 @@ def encrypt(plaintext: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
 def decrypt(ciphertext: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
     """
     Hill cipher decryption.
-    parameters: expects 'key_matrix' (list of lists) OR 'key' (string of length n*n)
-    Returns dict with:
-        plaintext (str),
-        key_matrix (list of lists),
-        steps (list of step strings)
     """
     key_mat = parse_key_matrix_from_params(parameters)
     key_mat = key_mat % MOD
     n = key_mat.shape[0]
 
-    # compute modular inverse of key matrix
+    if n == 0:
+        return {"plaintext": ciphertext, "key_matrix": [], "steps": ["Error: Key matrix is empty. No decryption performed."]}
+
     inv_key = matrix_mod_inv(key_mat, MOD)
 
-    # Prepare ciphertext: uppercase, remove non-alpha
+    # --- ADDED: Format the inverse key matrix for display in the steps ---
+    matrix_str_repr = "\n".join(["  ".join(map(str, row)) for row in inv_key])
+    steps = [f"Using Inverse Key Matrix:\n{matrix_str_repr}\n" + "-"*20]
+
     filtered = "".join([c for c in ciphertext if c.isalpha()]).upper()
     if len(filtered) == 0:
-        return {"plaintext": "", "key_matrix": key_mat.tolist(), "steps": []}
+        return {"plaintext": "", "key_matrix": key_mat.tolist(), "steps": steps}
     if len(filtered) % n != 0:
         raise ValueError(
             f"Ciphertext length must be multiple of key matrix size {n}.")
 
-    steps = []
     plaintext = ""
-
     for i in range(0, len(filtered), n):
         block = filtered[i:i+n]
         vec = np.array(text_to_numbers(block), dtype=int).reshape(n, 1)
@@ -194,22 +200,28 @@ def decrypt(ciphertext: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
 # Standalone test (run as script)
 # -------------------------
 if __name__ == "__main__":
-    # Example using classic 3x3 key "GYBNQKURP" -> matrix [[6,24,1],[13,16,10],[20,17,15]]
-    # alternative: {"key_matrix": [[6,24,1],[13,16,10],[20,17,15]]}
-    params = {"key": "GYBNQKURP"}
+    print("--- Testing with TEXT key ---")
+    params_text = {"key": "GYBNQKURP"}
     message = "ACT"
-
-    enc = encrypt(message, params)
-    print("Plaintext:", message)
-    print("Key matrix:")
-    for row in enc["key_matrix"]:
-        print(row)
-    print("Ciphertext:", enc["ciphertext"])
+    enc_text = encrypt(message, params_text)
+    print("Ciphertext:", enc_text["ciphertext"])
     print("Steps:")
-    for s in enc["steps"]:
+    for s in enc_text["steps"]:
         print(" ", s)
 
-    dec = decrypt(enc["ciphertext"], params)
+    print("\n" + "="*30 + "\n")
+
+    print("--- Testing with MATRIX key ---")
+    # This is the matrix equivalent of "GYBNQKURP"
+    params_matrix = {"key_matrix": [[6, 24, 1], [13, 16, 10], [20, 17, 15]]}
+    enc_matrix = encrypt(message, params_matrix)
+    print("Ciphertext:", enc_matrix["ciphertext"])
+    print("Steps:")
+    for s in enc_matrix["steps"]:
+        print(" ", s)
+
+    print("\n--- Testing Decryption ---")
+    dec = decrypt(enc_matrix["ciphertext"], params_matrix)
     print("\nDecrypted back:", dec["plaintext"])
     print("Decryption steps:")
     for s in dec["steps"]:

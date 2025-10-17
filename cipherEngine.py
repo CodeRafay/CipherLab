@@ -1,0 +1,192 @@
+# product.py
+
+import os
+import importlib
+import traceback
+from typing import List, Dict, Any
+import sys
+
+# --- 1. DYNAMIC CIPHER LOADING ---
+CIPHER_MODULES = {}
+
+
+def load_ciphers(path: str = "ciphers"):
+    """
+    Dynamically finds and imports all valid .py cipher files from a given directory.
+    This makes the application extensible without changing this file.
+
+    Args:
+        path (str): The directory path to scan for cipher modules. Defaults to "ciphers".
+    """
+    global CIPHER_MODULES
+    if path not in sys.path:
+        sys.path.append(path)
+    excluded_files = ["__init__.py"]
+
+    def format_name(filename):
+        name = os.path.splitext(filename)[0]
+        if name.lower() in ["onetimepad", "playfair"]:
+            return name.capitalize()
+        return ''.join([' ' + char if char.isupper() else char for char in name]).lstrip().title()
+
+    try:
+        for filename in os.listdir(path):
+            if filename.endswith(".py") and filename not in excluded_files:
+                module_name = os.path.splitext(filename)[0]
+                try:
+                    module = importlib.import_module(module_name)
+                    # Updated check to be more robust
+                    if hasattr(module, 'encrypt'):
+                        pretty_name = format_name(filename)
+                        CIPHER_MODULES[pretty_name] = module
+                        print(f"Successfully loaded cipher: {pretty_name}")
+                except ImportError as e:
+                    print(f"Error importing {module_name}: {e}")
+                    traceback.print_exc()
+    except FileNotFoundError:
+        print(
+            f"Warning: Directory '{path}' not found. No ciphers were loaded.")
+
+
+def get_available_ciphers() -> List[str]:
+    """Returns a sorted list of names of the loaded ciphers."""
+    return sorted(CIPHER_MODULES.keys())
+
+# --- 2. ADAPTER LAYER (Handles Inconsistencies) ---
+
+
+def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    A centralized adapter function to call the correct encrypt/decrypt method
+    for any given cipher, normalizing its parameters and return value.
+    This is an internal ("private") function.
+    """
+    module = CIPHER_MODULES.get(cipher_name)
+    if not module:
+        raise ValueError(f"Cipher '{cipher_name}' not found or loaded.")
+
+    result = {}
+    try:
+        module_name = module.__name__
+
+        if module_name in ["caesar", "affine"]:
+            func = getattr(module, op_type)
+            output_text, steps = func(text, params)
+            result = {"text": output_text, "steps": steps}
+
+        elif module_name in ["hill", "vigenere", "playFair", "enigmaRotor", "columnTransposition", "OneTimePad"]:
+            func = getattr(module, op_type)
+            raw_output = func(text, params)
+            key_to_get = "ciphertext" if op_type == "encrypt" else "plaintext"
+            if module_name == "enigmaRotor":
+                key_to_get = "ciphertext"
+            # Return the generated key for OTP if it exists
+            result = {"text": raw_output.get(key_to_get, ""), "steps": raw_output.get(
+                "steps", []), "key": raw_output.get("key")}
+
+        elif module_name == "railFence":
+            func = getattr(module, op_type)
+            output_text, matrix = func(text, **params)
+            viz = "\n".join(" ".join(ch if ch else "." for ch in row)
+                            for row in matrix)
+            result = {"text": output_text, "steps": [
+                f"Rail Fence Matrix:\n{viz}"]}
+
+        else:
+            raise NotImplementedError(
+                f"Adapter not implemented for cipher '{cipher_name}'.")
+
+    except Exception as e:
+        return {"text": f"ERROR in {cipher_name}: {e}", "steps": [f"An error occurred: {traceback.format_exc()}"]}
+
+    return result
+
+# --- 3. PUBLIC API FUNCTIONS ---
+
+
+def process_single_cipher(op_type: str, cipher_name: str, text: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Public function to encrypt or decrypt text using a single cipher.
+    This will be used by the 'Cipher Toolkit' page.
+    """
+    return _call_cipher_op(op_type, cipher_name, text, params)
+
+
+def encrypt_product(plaintext: str, cipher1: str, params1: Dict, cipher2: str, params2: Dict) -> Dict:
+    """
+    Encrypts plaintext by applying two ciphers in sequence.
+    This will be used by the 'Product Cipher Lab' page.
+    """
+    stage1_result = _call_cipher_op("encrypt", cipher1, plaintext, params1)
+    intermediate_text = stage1_result["text"]
+    if "ERROR" in intermediate_text:
+        return {"ciphertext": intermediate_text, "steps": stage1_result["steps"]}
+    stage2_result = _call_cipher_op(
+        "encrypt", cipher2, intermediate_text, params2)
+    final_ciphertext = stage2_result["text"]
+    all_steps = [
+        f"--- STAGE 1: {cipher1} Encryption ---",
+        *stage1_result.get("steps", ["No steps provided."]),
+        f"\nIntermediate Text: {intermediate_text}\n",
+        f"--- STAGE 2: {cipher2} Encryption ---",
+        *stage2_result.get("steps", ["No steps provided."]),
+    ]
+    return {"ciphertext": final_ciphertext, "steps": all_steps}
+
+
+def decrypt_product(ciphertext: str, cipher1: str, params1: Dict, cipher2: str, params2: Dict) -> Dict:
+    """
+    Decrypts ciphertext by applying two ciphers in reverse order.
+    This will be used by the 'Product Cipher Lab' page.
+    """
+    stage1_result = _call_cipher_op("decrypt", cipher2, ciphertext, params2)
+    intermediate_text = stage1_result["text"]
+    if "ERROR" in intermediate_text:
+        return {"plaintext": intermediate_text, "steps": stage1_result["steps"]}
+    stage2_result = _call_cipher_op(
+        "decrypt", cipher1, intermediate_text, params1)
+    final_plaintext = stage2_result["text"]
+    all_steps = [
+        f"--- STAGE 1: {cipher2} Decryption (Reverse Order) ---",
+        *stage1_result.get("steps", ["No steps provided."]),
+        f"\nIntermediate Text: {intermediate_text}\n",
+        f"--- STAGE 2: {cipher1} Decryption (Reverse Order) ---",
+        *stage2_result.get("steps", ["No steps provided."]),
+    ]
+    return {"plaintext": final_plaintext, "steps": all_steps}
+
+
+# --- 4. STANDALONE EXAMPLE USAGE ---
+if __name__ == "__main__":
+    print("Loading available ciphers from './ciphers/' directory...")
+    load_ciphers()
+
+    if not get_available_ciphers():
+        print("\nNo ciphers found. Make sure your cipher files are in a 'ciphers' subdirectory.")
+    else:
+        print("\nAvailable ciphers:", get_available_ciphers())
+
+        print("\n--- Testing Single Cipher: Caesar ---")
+        caesar_result = process_single_cipher(
+            "encrypt", "Caesar", "HELLO WORLD", {"shift": 3})
+        print(f"Result: {caesar_result['text']}")
+        print("--- Caesar Steps ---")
+        print("\n".join(caesar_result['steps']))
+
+        print("\n--- Testing Product Cipher: Vigenere -> Rail Fence ---")
+        original_text = "THIS IS A SECRET MESSAGE"
+        c1_name, c1_params = "Vigenere", {"key": "CRYPTO"}
+        c2_name, c2_params = "Rail Fence", {"rails": 4}
+
+        encryption_result = encrypt_product(
+            original_text, c1_name, c1_params, c2_name, c2_params)
+        print(f"\nOriginal Text: {original_text}")
+        print(f"Final Ciphertext: {encryption_result['ciphertext']}")
+        print("\n--- Product Encryption Steps ---")
+        print("\n".join(encryption_result['steps']))
+
+        decryption_result = decrypt_product(
+            encryption_result['ciphertext'], c1_name, c1_params, c2_name, c2_params)
+        print(f"\nDecrypted Text: {decryption_result['plaintext']}")
+        print("\n--- Product Decryption Steps ---")
+        print("\n".join(decryption_result['steps']))
