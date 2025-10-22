@@ -6,7 +6,6 @@ import pandas as pd
 from typing import Dict, Any
 
 # --- Import Core Logic ---
-# These imports assume product.py and cryptAnalysis.py are in the root directory.
 from cipherEngine import (
     load_ciphers,
     get_available_ciphers,
@@ -23,7 +22,7 @@ from cryptAnalysis import (
 # --- App Configuration ---
 st.set_page_config(
     page_title="CipherLab",
-    page_icon="🔐",
+    page_icon="柏",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -100,6 +99,12 @@ def get_ui_params(cipher_name: str, key_prefix: str) -> Dict[str, Any]:
         r3 = cols[2].selectbox("Slow Rotor", list(
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"), key=f"{key_prefix}_r3")
         params["rotor_positions"] = (r1, r2, r3)
+
+    elif cipher_name == "DES":
+        st.info("The DES key must be exactly 8 characters (64 bits) long.")
+        params["key"] = st.text_input(
+            "Enter 8-Character Key", value="secretky", max_chars=8, key=f"{key_prefix}_des_key")
+
     else:
         st.text("This cipher requires no special parameters.")
 
@@ -109,9 +114,8 @@ def get_ui_params(cipher_name: str, key_prefix: str) -> Dict[str, Any]:
 
 
 def render_toolkit_page():
-    """Renders the UI for the Single Cipher Toolkit page."""
-    st.title("🛠️ Classical Cipher Toolkit")
-    st.markdown("Encrypt or decrypt messages using a single classical cipher.")
+    st.title("🛠️Classical & Modern Cipher Toolkit")
+    st.markdown("Encrypt or decrypt messages using a single cipher.")
 
     cipher_list = get_available_ciphers()
     selected_cipher = st.selectbox("Choose a Cipher", cipher_list)
@@ -132,20 +136,28 @@ def render_toolkit_page():
                 result = process_single_cipher(
                     "encrypt", selected_cipher, input_text, params)
                 st.session_state.toolkit_result = result
+                st.session_state.last_op = "encrypt"
 
         if decrypt_button.button("Decrypt", use_container_width=True):
             with st.spinner("Decrypting..."):
                 result = process_single_cipher(
                     "decrypt", selected_cipher, input_text, params)
                 st.session_state.toolkit_result = result
+                st.session_state.last_op = "decrypt"
 
     with col2:
         st.subheader("Output")
         if 'toolkit_result' in st.session_state:
             result = st.session_state.toolkit_result
-            # For OTP, if a key was generated, display it to the user.
             if selected_cipher == "Onetimepad" and result.get("key"):
                 st.info(f"Generated/Used Key: {result['key']}")
+
+            # **FIX**: Add specific label for DES hex output
+            output_label = "Output"
+            if selected_cipher == "DES" and st.session_state.get("last_op") == "encrypt":
+                output_label = "Ciphertext (Hexadecimal)"
+
+            st.markdown(f"**{output_label}**")
             st.code(result.get("text", "No output."), language="")
 
             with st.expander("Show Step-by-Step Breakdown"):
@@ -154,8 +166,7 @@ def render_toolkit_page():
 
 
 def render_product_lab_page():
-    """Renders the UI for the Product Cipher Lab page."""
-    st.title("🔬 Product Cipher Laboratory")
+    st.title("溌 Product Cipher Laboratory")
     st.info("A Product Cipher enhances security by applying two ciphers in sequence. Decryption occurs in the reverse order of encryption.")
 
     cipher_list = get_available_ciphers()
@@ -205,8 +216,7 @@ def render_product_lab_page():
 
 
 def render_encyclopedia_page():
-    """Renders the UI for the Cipher Encyclopedia page."""
-    st.title("📚 Cipher Encyclopedia")
+    st.title("答 Cipher Encyclopedia")
     st.markdown(
         "Learn about the history, mechanics, and security of each cipher.")
 
@@ -215,17 +225,13 @@ def render_encyclopedia_page():
         description_files = [f for f in os.listdir(
             desc_path) if f.endswith(".md")]
 
-        # Create a more robust function to format filenames into display names
         def format_display_name(filename):
             name_no_ext = os.path.splitext(filename)[0]
-            # Handle snake_case first
             name_spaced = name_no_ext.replace('_', ' ')
-            # Use logic to insert spaces for camelCase, then title case the result
             final_name = ''.join([' ' + char if char.isupper() and i > 0 and name_spaced[i-1]
                                  != ' ' else char for i, char in enumerate(name_spaced)]).lstrip()
-            # Handle special cases from product.py for consistency
-            if final_name.lower() in ["onetimepad", "playfair"]:
-                return final_name.capitalize()
+            if final_name.lower() in ["onetimepad", "playfair", "des"]:
+                return final_name.upper() if final_name.lower() == "des" else final_name.capitalize()
             return final_name.title()
 
         cipher_names_map = {format_display_name(
@@ -247,8 +253,7 @@ def render_encyclopedia_page():
 
 
 def render_cryptanalysis_page():
-    """Renders the UI for the Cryptanalysis Tools page."""
-    st.title("🔓 Cryptanalysis Tools")
+    st.title("箔 Cryptanalysis Tools")
     st.markdown("Analyze ciphertext to uncover its weaknesses and patterns.")
 
     tool = st.selectbox("Select a Tool", [
@@ -294,12 +299,11 @@ def render_cryptanalysis_page():
 
 def main():
     """Main function to run the Streamlit app."""
-    # Load ciphers at the start of the app
     load_ciphers("ciphers")
 
-    st.sidebar.title("Cryptography Suite")
+    st.sidebar.title("CipherLab")
     st.sidebar.markdown(
-        "A tool for learning and experimenting with classical ciphers.")
+        "A tool for learning and experimenting with classical and modern ciphers.")
 
     page_options = {
         "Cipher Toolkit": render_toolkit_page,
@@ -310,10 +314,17 @@ def main():
 
     page_selection = st.sidebar.radio("Go to", list(page_options.keys()))
 
-    # Render the selected page
     page_options[page_selection]()
 
+    # Sidebar information
     st.sidebar.markdown("---")
+    st.sidebar.markdown("#### RAFAY ADEEL")
+    st.sidebar.markdown("**CipherLab All Rights Reserved.**")
+    # Optional: Add version info or contact
+    st.sidebar.markdown("**Version 1.0**")
+    st.sidebar.markdown(
+        "For inquiries: [Rafay Adeel](mailto:rafayadeel1999@gmail.com)")
+    # Final info
     st.sidebar.info("Built for educational purposes.")
 
 

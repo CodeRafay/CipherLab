@@ -1,4 +1,4 @@
-# product.py
+# cipherEngine.py
 
 import os
 import importlib
@@ -14,9 +14,6 @@ def load_ciphers(path: str = "ciphers"):
     """
     Dynamically finds and imports all valid .py cipher files from a given directory.
     This makes the application extensible without changing this file.
-
-    Args:
-        path (str): The directory path to scan for cipher modules. Defaults to "ciphers".
     """
     global CIPHER_MODULES
     if path not in sys.path:
@@ -25,8 +22,8 @@ def load_ciphers(path: str = "ciphers"):
 
     def format_name(filename):
         name = os.path.splitext(filename)[0]
-        if name.lower() in ["onetimepad", "playfair"]:
-            return name.capitalize()
+        if name.lower() in ["onetimepad", "playfair", "des"]:
+            return name.upper() if name.lower() == "des" else name.capitalize()
         return ''.join([' ' + char if char.isupper() else char for char in name]).lstrip().title()
 
     try:
@@ -35,7 +32,6 @@ def load_ciphers(path: str = "ciphers"):
                 module_name = os.path.splitext(filename)[0]
                 try:
                     module = importlib.import_module(module_name)
-                    # Updated check to be more robust
                     if hasattr(module, 'encrypt'):
                         pretty_name = format_name(filename)
                         CIPHER_MODULES[pretty_name] = module
@@ -59,7 +55,6 @@ def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str,
     """
     A centralized adapter function to call the correct encrypt/decrypt method
     for any given cipher, normalizing its parameters and return value.
-    This is an internal ("private") function.
     """
     module = CIPHER_MODULES.get(cipher_name)
     if not module:
@@ -74,13 +69,12 @@ def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str,
             output_text, steps = func(text, params)
             result = {"text": output_text, "steps": steps}
 
-        elif module_name in ["hill", "vigenere", "playFair", "enigmaRotor", "columnTransposition", "OneTimePad"]:
+        elif module_name in ["hill", "vigenere", "playFair", "enigmaRotor", "columnTransposition", "OneTimePad", "des"]:
             func = getattr(module, op_type)
             raw_output = func(text, params)
             key_to_get = "ciphertext" if op_type == "encrypt" else "plaintext"
             if module_name == "enigmaRotor":
                 key_to_get = "ciphertext"
-            # Return the generated key for OTP if it exists
             result = {"text": raw_output.get(key_to_get, ""), "steps": raw_output.get(
                 "steps", []), "key": raw_output.get("key")}
 
@@ -105,18 +99,10 @@ def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str,
 
 
 def process_single_cipher(op_type: str, cipher_name: str, text: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Public function to encrypt or decrypt text using a single cipher.
-    This will be used by the 'Cipher Toolkit' page.
-    """
     return _call_cipher_op(op_type, cipher_name, text, params)
 
 
 def encrypt_product(plaintext: str, cipher1: str, params1: Dict, cipher2: str, params2: Dict) -> Dict:
-    """
-    Encrypts plaintext by applying two ciphers in sequence.
-    This will be used by the 'Product Cipher Lab' page.
-    """
     stage1_result = _call_cipher_op("encrypt", cipher1, plaintext, params1)
     intermediate_text = stage1_result["text"]
     if "ERROR" in intermediate_text:
@@ -135,10 +121,6 @@ def encrypt_product(plaintext: str, cipher1: str, params1: Dict, cipher2: str, p
 
 
 def decrypt_product(ciphertext: str, cipher1: str, params1: Dict, cipher2: str, params2: Dict) -> Dict:
-    """
-    Decrypts ciphertext by applying two ciphers in reverse order.
-    This will be used by the 'Product Cipher Lab' page.
-    """
     stage1_result = _call_cipher_op("decrypt", cipher2, ciphertext, params2)
     intermediate_text = stage1_result["text"]
     if "ERROR" in intermediate_text:
