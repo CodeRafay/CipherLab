@@ -21,7 +21,7 @@ from cryptAnalysis import (
 
 # --- App Configuration ---
 st.set_page_config(
-    page_title="CipherLab",
+    page_title="CipherLabs",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -105,9 +105,9 @@ def get_ui_params(cipher_name: str, key_prefix: str) -> Dict[str, Any]:
         params["key"] = st.text_input(
             "Enter 8-Character Key", value="secretky", max_chars=8, key=f"{key_prefix}_des_key")
 
-    elif cipher_name == "AES":
+    elif cipher_name == "AES-128":
         st.info(
-            "The AES key must be a 16-character string (128 bits) OR a 32-character hex string.")
+            "The AES-128 key must be a 16-character string (128 bits) OR a 32-character hex string.")
         params["key"] = st.text_input(
             "Enter 16-Char or 32-Hex Key", value="mysecretkey12345", key=f"{key_prefix}_aes_key")
 
@@ -163,7 +163,7 @@ def render_toolkit_page():
             if st.session_state.get("last_op") == "encrypt":
                 if selected_cipher == "DES":
                     output_label = "Ciphertext (Hexadecimal)"
-                elif selected_cipher == "AES":
+                elif selected_cipher == "AES-128":
                     output_label = "Ciphertext (Base64)"
 
             st.markdown(f"**{output_label}**")
@@ -239,8 +239,8 @@ def render_encyclopedia_page():
             name_spaced = name_no_ext.replace('_', ' ')
             final_name = ''.join([' ' + char if char.isupper() and i > 0 and name_spaced[i-1]
                                  != ' ' else char for i, char in enumerate(name_spaced)]).lstrip()
-            if final_name.lower() in ["onetimepad", "playfair", "des", "aes"]:
-                return final_name.upper() if final_name.lower() in ["des", "aes"] else final_name.capitalize()
+            if final_name.lower() in ["onetimepad", "playfair", "des", "aes-128"]:
+                return final_name.upper() if final_name.lower() in ["des", "aes-128"] else final_name.capitalize()
             return final_name.title()
 
         cipher_names_map = {format_display_name(
@@ -310,7 +310,7 @@ def main():
     """Main function to run the Streamlit app."""
     load_ciphers("ciphers")
 
-    st.sidebar.title("CipherLab")
+    st.sidebar.title("CipherLabs")
     st.sidebar.markdown(
         "A tool for learning and experimenting with classical and modern ciphers.")
 
@@ -327,10 +327,13 @@ def main():
 
     # Sidebar information
     st.sidebar.markdown("---")
-    st.sidebar.markdown("#### RAFAY ADEEL")
-    st.sidebar.markdown("**CipherLab All Rights Reserved.**")
+    # st.sidebar.markdown("#### RAFAY ADEEL")
+    st.sidebar.markdown("**CipherLabs All Rights Reserved.**")
     # Optional: Add version info or contact
-    st.sidebar.markdown("**Version 1.1 (AES Added)**")
+    # version 1.1: DES
+    # version 1.2: AES-128
+
+    st.sidebar.markdown("**Version 1.2**")
     st.sidebar.markdown(
         "For inquiries: [Rafay Adeel](mailto:rafayadeel1999@gmail.com)")
     # Final info

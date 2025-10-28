@@ -18,12 +18,12 @@ def load_ciphers(path: str = "ciphers"):
     global CIPHER_MODULES
     if path not in sys.path:
         sys.path.append(path)
-    excluded_files = ["__init__.py"]
+    excluded_files = ["__init__.py", "product.py"]
 
     def format_name(filename):
         name = os.path.splitext(filename)[0]
-        if name.lower() in ["onetimepad", "playfair", "des", "aes"]:
-            return name.upper() if name.lower() in ["des", "aes"] else name.capitalize()
+        if name.lower() in ["onetimepad", "playfair", "des", "aes-128"]:
+            return name.upper() if name.lower() in ["des", "aes-128"] else name.capitalize()
         return ''.join([' ' + char if char.isupper() else char for char in name]).lstrip().title()
 
     try:
@@ -73,7 +73,7 @@ def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str,
             output_text, steps = func(text, params)
             result = {"text": output_text, "steps": steps}
 
-        elif module_name in ["hill", "vigenere", "playfair", "enigmarotor", "columntransposition", "onetimepad", "des", "aes"]:
+        elif module_name in ["hill", "vigenere", "playfair", "enigmarotor", "columntransposition", "onetimepad", "des", "aes-128"]:
             func = getattr(module, op_type)
             raw_output = func(text, params)
             key_to_get = "ciphertext" if op_type == "encrypt" else "plaintext"
@@ -165,18 +165,19 @@ if __name__ == "__main__":
         print("--- Caesar Steps ---")
         print("\n".join(caesar_result['steps']))
 
-        print("\n--- Testing Single Cipher: AES ---")
+        print("\n--- Testing Single Cipher: AES-128 ---")
         aes_result = process_single_cipher(
-            "encrypt", "AES", "This is a test.", {"key": "mysecretkey12345"})
+            "encrypt", "AES-128", "This is a test.", {"key": "mysecretkey12345"})
         print(f"Result: {aes_result['text']}")
         aes_dec_result = process_single_cipher(
-            "decrypt", "AES", aes_result['text'], {"key": "mysecretkey12345"})
+            "decrypt", "AES-128", aes_result['text'], {"key": "mysecretkey12345"})
         print(f"Decrypted: {aes_dec_result['text']}")
 
-        print("\n--- Testing Product Cipher: Vigenere -> AES ---")
+        print("\n--- Testing Product Cipher: Vigenere -> AES-128 ---")
         original_text = "THIS IS A SECRET MESSAGE"
         c1_name, c1_params = "Vigenere", {"key": "CRYPTO"}
-        c2_name, c2_params = "AES", {"key": "2b7e151628aed2a6abf7158809cf4f3c"}
+        c2_name, c2_params = "AES-128", {
+            "key": "2b7e151628aed2a6abf7158809cf4f3c"}
 
         encryption_result = encrypt_product(
             original_text, c1_name, c1_params, c2_name, c2_params)
