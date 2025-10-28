@@ -9,7 +9,7 @@ Whether you're a student, history enthusiast, or developer curious about encrypt
 ## 🚀 Live Demo
 
 Access the live, deployed version of the application here:
-[cipherlab.streamlit.app](https://cipherlab.streamlit.app)
+[CipherLabs](https://cipherlabs.streamlit.app)
 
 ---
 
