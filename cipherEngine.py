@@ -22,8 +22,8 @@ def load_ciphers(path: str = "ciphers"):
 
     def format_name(filename):
         name = os.path.splitext(filename)[0]
-        if name.lower() in ["onetimepad", "playfair", "des"]:
-            return name.upper() if name.lower() == "des" else name.capitalize()
+        if name.lower() in ["onetimepad", "playfair", "des", "aes"]:
+            return name.upper() if name.lower() in ["des", "aes"] else name.capitalize()
         return ''.join([' ' + char if char.isupper() else char for char in name]).lstrip().title()
 
     try:
@@ -31,8 +31,12 @@ def load_ciphers(path: str = "ciphers"):
             if filename.endswith(".py") and filename not in excluded_files:
                 module_name = os.path.splitext(filename)[0]
                 try:
+                    # Ensure module is reloaded if it already exists (for development)
+                    if module_name in sys.modules:
+                        importlib.reload(sys.modules[module_name])
+
                     module = importlib.import_module(module_name)
-                    if hasattr(module, 'encrypt'):
+                    if hasattr(module, 'encrypt') and hasattr(module, 'decrypt'):
                         pretty_name = format_name(filename)
                         CIPHER_MODULES[pretty_name] = module
                         print(f"Successfully loaded cipher: {pretty_name}")
@@ -62,23 +66,26 @@ def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str,
 
     result = {}
     try:
-        module_name = module.__name__
+        module_name = module.__name__.lower()  # Use lower for consistent matching
 
         if module_name in ["caesar", "affine"]:
             func = getattr(module, op_type)
             output_text, steps = func(text, params)
             result = {"text": output_text, "steps": steps}
 
-        elif module_name in ["hill", "vigenere", "playFair", "enigmaRotor", "columnTransposition", "OneTimePad", "des"]:
+        elif module_name in ["hill", "vigenere", "playfair", "enigmarotor", "columntransposition", "onetimepad", "des", "aes"]:
             func = getattr(module, op_type)
             raw_output = func(text, params)
             key_to_get = "ciphertext" if op_type == "encrypt" else "plaintext"
-            if module_name == "enigmaRotor":
-                key_to_get = "ciphertext"
+
+            # Special case for enigma
+            if module_name == "enigmarotor":
+                key_to_get = "ciphertext"  # Enigma module returns 'ciphertext' for both ops
+
             result = {"text": raw_output.get(key_to_get, ""), "steps": raw_output.get(
                 "steps", []), "key": raw_output.get("key")}
 
-        elif module_name == "railFence":
+        elif module_name == "railfence":
             func = getattr(module, op_type)
             output_text, matrix = func(text, **params)
             viz = "\n".join(" ".join(ch if ch else "." for ch in row)
@@ -88,10 +95,13 @@ def _call_cipher_op(op_type: str, cipher_name: str, text: str, params: Dict[str,
 
         else:
             raise NotImplementedError(
-                f"Adapter not implemented for cipher '{cipher_name}'.")
+                f"Adapter not implemented for cipher '{cipher_name}' ({module_name}).")
 
     except Exception as e:
-        return {"text": f"ERROR in {cipher_name}: {e}", "steps": [f"An error occurred: {traceback.format_exc()}"]}
+        error_message = f"ERROR in {cipher_name}: {e}"
+        print(error_message)
+        traceback.print_exc()
+        return {"text": error_message, "steps": [f"An error occurred: {traceback.format_exc()}"]}
 
     return result
 
@@ -155,10 +165,18 @@ if __name__ == "__main__":
         print("--- Caesar Steps ---")
         print("\n".join(caesar_result['steps']))
 
-        print("\n--- Testing Product Cipher: Vigenere -> Rail Fence ---")
+        print("\n--- Testing Single Cipher: AES ---")
+        aes_result = process_single_cipher(
+            "encrypt", "AES", "This is a test.", {"key": "mysecretkey12345"})
+        print(f"Result: {aes_result['text']}")
+        aes_dec_result = process_single_cipher(
+            "decrypt", "AES", aes_result['text'], {"key": "mysecretkey12345"})
+        print(f"Decrypted: {aes_dec_result['text']}")
+
+        print("\n--- Testing Product Cipher: Vigenere -> AES ---")
         original_text = "THIS IS A SECRET MESSAGE"
         c1_name, c1_params = "Vigenere", {"key": "CRYPTO"}
-        c2_name, c2_params = "Rail Fence", {"rails": 4}
+        c2_name, c2_params = "AES", {"key": "2b7e151628aed2a6abf7158809cf4f3c"}
 
         encryption_result = encrypt_product(
             original_text, c1_name, c1_params, c2_name, c2_params)

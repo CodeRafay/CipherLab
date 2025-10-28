@@ -22,7 +22,7 @@ from cryptAnalysis import (
 # --- App Configuration ---
 st.set_page_config(
     page_title="CipherLab",
-    page_icon="柏",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -105,6 +105,12 @@ def get_ui_params(cipher_name: str, key_prefix: str) -> Dict[str, Any]:
         params["key"] = st.text_input(
             "Enter 8-Character Key", value="secretky", max_chars=8, key=f"{key_prefix}_des_key")
 
+    elif cipher_name == "AES":
+        st.info(
+            "The AES key must be a 16-character string (128 bits) OR a 32-character hex string.")
+        params["key"] = st.text_input(
+            "Enter 16-Char or 32-Hex Key", value="mysecretkey12345", key=f"{key_prefix}_aes_key")
+
     else:
         st.text("This cipher requires no special parameters.")
 
@@ -114,7 +120,7 @@ def get_ui_params(cipher_name: str, key_prefix: str) -> Dict[str, Any]:
 
 
 def render_toolkit_page():
-    st.title("🛠️Classical & Modern Cipher Toolkit")
+    st.title("🛠️ Classical & Modern Cipher Toolkit")
     st.markdown("Encrypt or decrypt messages using a single cipher.")
 
     cipher_list = get_available_ciphers()
@@ -152,10 +158,13 @@ def render_toolkit_page():
             if selected_cipher == "Onetimepad" and result.get("key"):
                 st.info(f"Generated/Used Key: {result['key']}")
 
-            # **FIX**: Add specific label for DES hex output
+            # **FIX**: Add specific label for DES/AES hex/base64 output
             output_label = "Output"
-            if selected_cipher == "DES" and st.session_state.get("last_op") == "encrypt":
-                output_label = "Ciphertext (Hexadecimal)"
+            if st.session_state.get("last_op") == "encrypt":
+                if selected_cipher == "DES":
+                    output_label = "Ciphertext (Hexadecimal)"
+                elif selected_cipher == "AES":
+                    output_label = "Ciphertext (Base64)"
 
             st.markdown(f"**{output_label}**")
             st.code(result.get("text", "No output."), language="")
@@ -166,7 +175,7 @@ def render_toolkit_page():
 
 
 def render_product_lab_page():
-    st.title("溌 Product Cipher Laboratory")
+    st.title("🧪 Product Cipher Laboratory")
     st.info("A Product Cipher enhances security by applying two ciphers in sequence. Decryption occurs in the reverse order of encryption.")
 
     cipher_list = get_available_ciphers()
@@ -216,7 +225,7 @@ def render_product_lab_page():
 
 
 def render_encyclopedia_page():
-    st.title("答 Cipher Encyclopedia")
+    st.title("📚 Cipher Encyclopedia")
     st.markdown(
         "Learn about the history, mechanics, and security of each cipher.")
 
@@ -230,8 +239,8 @@ def render_encyclopedia_page():
             name_spaced = name_no_ext.replace('_', ' ')
             final_name = ''.join([' ' + char if char.isupper() and i > 0 and name_spaced[i-1]
                                  != ' ' else char for i, char in enumerate(name_spaced)]).lstrip()
-            if final_name.lower() in ["onetimepad", "playfair", "des"]:
-                return final_name.upper() if final_name.lower() == "des" else final_name.capitalize()
+            if final_name.lower() in ["onetimepad", "playfair", "des", "aes"]:
+                return final_name.upper() if final_name.lower() in ["des", "aes"] else final_name.capitalize()
             return final_name.title()
 
         cipher_names_map = {format_display_name(
@@ -253,7 +262,7 @@ def render_encyclopedia_page():
 
 
 def render_cryptanalysis_page():
-    st.title("箔 Cryptanalysis Tools")
+    st.title("📈 Cryptanalysis Tools")
     st.markdown("Analyze ciphertext to uncover its weaknesses and patterns.")
 
     tool = st.selectbox("Select a Tool", [
@@ -321,7 +330,7 @@ def main():
     st.sidebar.markdown("#### RAFAY ADEEL")
     st.sidebar.markdown("**CipherLab All Rights Reserved.**")
     # Optional: Add version info or contact
-    st.sidebar.markdown("**Version 1.0**")
+    st.sidebar.markdown("**Version 1.1 (AES Added)**")
     st.sidebar.markdown(
         "For inquiries: [Rafay Adeel](mailto:rafayadeel1999@gmail.com)")
     # Final info
